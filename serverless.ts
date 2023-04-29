@@ -15,13 +15,23 @@ const serverlessConfiguration: AWS = {
     webpack: {
       webpackConfig: './webpack.config.js',
       includeModules: false
+    },
+    'serverless-offline': {
+      noPrependStageInUrl: true
+    },
+    ngrokTunnel: {
+      tunnels: {
+        port: 3000,
+        envProp: 'API_GATEWAY'
+      }
     }
   },
   plugins: [
     'serverless-webpack', 
     'serverless-layers', 
     'serverless-aws-latest-layer-version',
-    'serverless-offline'
+    'serverless-offline',
+    'serverless-ngrok-tunnel'
   ],
   provider: {
     stage: current.stage,
@@ -38,13 +48,26 @@ const serverlessConfiguration: AWS = {
     lambdaHashingVersion: '20201221'
   },
   functions: {
-    handler: {
+    job: {
       name: 'SendReminder',
-      handler: 'src/index.handler',
+      handler: 'src/index.job',
       events: [
         {
           schedule: {
-            rate: ['rate(3 minutes)']
+            rate: ['cron(0 7,10,14,17 * * ? *)']
+          }
+        }
+      ]
+    },
+    handler: {
+      name: 'HandleMessageRequests',
+      handler: 'src/index.handler',
+      events: [
+        {
+          http: {
+            path: '/{proxy+}',
+            method: 'ANY',
+            cors: false
           }
         }
       ]
