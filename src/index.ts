@@ -1,27 +1,24 @@
 import dotenv from 'dotenv'
+import express from 'express'
+import serverless from 'serverless-http'
+import router from './routes'
+import { Job } from './services/job'
+
 dotenv.config()
-const accountSid = process.env.TWILIO_ACCOUNT_SID as string
-const authToken = process.env.TWILIO_AUTH_TOKEN as string
 
-console.log('accountSid', accountSid)
-console.log('authToken', authToken)
+const app = express()
 
-import { Twilio } from 'twilio'
+app.use(router)
 
-const twilioClient = new Twilio(accountSid, authToken)
+const handler = serverless(app)
 
-export async function handler (): Promise<unknown> {
+export async function job (): Promise<void> {
   try {
-    const response = await Promise.all([
-      twilioClient.messages.create({
-        body: Date.now().toString(),
-        from: 'whatsapp:+14155238886',       
-        to: 'whatsapp:+556799170828'
-      })
-    ])
-    console.log('response', response)
-    return response
+    const job = new Job()
+    await job.run()
   } catch (error) {
     throw new Error(error)
   }
 }
+
+export { handler }
