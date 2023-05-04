@@ -6,12 +6,8 @@
   "scripts": {
     "build": "tsc",
     "test": "export AWS_PROFILE=staging&& export AWS_REGION=us-east-1&& jest",
-    "test_win": "set AWS_PROFILE=staging&& set AWS_REGION=us-east-1&& jest",
     "start": "export AWS_PROFILE=staging&& export AWS_REGION=us-east-1&& sls offline start",
-    "staging": "export AWS_PROFILE=staging&& export AWS_REGION=us-east-1&& serverless deploy",
-    "staging_win": "set AWS_PROFILE=staging&& set AWS_REGION=us-east-1&& serverless deploy",
-    "deploy": "export AWS_PROFILE=prod&& export AWS_REGION=sa-east-1&& serverless deploy",
-    "deploy_win": "set AWS_PROFILE=prod&& set AWS_REGION=sa-east-1&& serverless deploy"
+    "deploy": "export AWS_PROFILE=default&& export AWS_REGION=us-east-1&& sls deploy"
   },
   "author": "",
   "license": "ISC",
