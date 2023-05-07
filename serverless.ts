@@ -54,7 +54,7 @@ const serverlessConfiguration: AWS = {
       events: [
         {
           schedule: {
-            rate: ['cron(0 7,10,14,17 * * ? *)']
+            rate: ['cron(0 8,12,14,17 * * ? *)']
           }
         }
       ]
