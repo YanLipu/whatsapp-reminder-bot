@@ -24,7 +24,6 @@ export async function getDataBase () {
 
 export async function insertNewTask (payload: TaskPayload) {
   try {
-    console.log('insertNewTask', payload)
     const response = await notion.pages.create({
       parent: {
         database_id: databaseName,
@@ -71,11 +70,8 @@ export async function insertNewTask (payload: TaskPayload) {
         }
       }
     })
-    console.log('response', response)
-    // inserir nova task no notion
     return response
   } catch (error) {
-    console.log('error', error)
     throw new Error(error)
   }
 }

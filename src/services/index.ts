@@ -83,11 +83,9 @@ async function insertIncomingMessageToUser (from: string, to: string, message: a
 const handle = async (req: any, res: any) => {
   try {
     const body = JSON.parse(JSON.stringify(req.body))
-    console.log('body', body)
 
     const previousMessages = await getHistory(body.From)
     const previousMessagesFromOurDB = await getUserData(body.From, body.To)
-    console.log('previousMessagesFromOurDB', previousMessagesFromOurDB)
     
     const response = new MessagingResponse()
 
@@ -103,8 +101,6 @@ const handle = async (req: any, res: any) => {
     const botManager = new BotManager(templates, mongoClient, response)
 
     const message = await botManager.handleStage(userData)
-
-    console.log('message', message)
     
     response.message(message.toString())
     

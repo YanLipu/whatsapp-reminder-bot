@@ -18,7 +18,6 @@ class Job {
 
   public async run () {
     try {
-      console.log('entrou na task')
       return await this.sendTaskToWhatsApp()
     } catch (error) {
       throw new Error(error)
@@ -27,21 +26,15 @@ class Job {
 
   private async sendTaskToWhatsApp () {
     try {
-      // buscar todas as tarefas do banco notion
       this.database = await this.getNotionTasks()
 
-      // verificar quais tem a data de lembrete de hoje
       this.todayTasks = await this.getTodayTasks()
 
-      // gerar o body da mensagem para as tasks de hoje
       this.bodyForTodayTasks = this.generateBodyForTodayTasks()
       
-      // verificar quantas voce tem pra fazer
       this.allTasksToDo = this.getAllToDoTasks()
 
       this.bodyForAllTasks = this.generateBodyForAllTasksToDo()
-      console.log('this.bodyForAllTasks', this.bodyForAllTasks)
-      // enviar mensagem estruturada
       await this.sendMessages()
       return true
     } catch (error) {
@@ -93,7 +86,6 @@ class Job {
 
         message += `*Task ${i + 1}*: ${taskName}\n\n`
       }
-      console.log(message)
       return message
     } catch (error) {
       throw new Error(error)
