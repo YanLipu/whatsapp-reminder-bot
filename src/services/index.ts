@@ -1,8 +1,11 @@
 import dotenv from 'dotenv'
 import { Twilio, twiml } from 'twilio'
 import { MongoClient, ServerApiVersion } from 'mongodb'
-import { templates } from '../templates/messages'
+import  Templates from '../templates/messages'
+import BotManager from './bot'
 const { MessagingResponse } = twiml
+
+const templates = new Templates()
 
 
 dotenv.config()
@@ -17,6 +20,8 @@ const twilioClient = new Twilio(accountSid, authToken)
 const mongoClient = new MongoClient(uri, {
   serverApi: ServerApiVersion.v1
 })
+const database = mongoClient.db('reminders')
+const users = database.collection('users')
 
 async function getHistory (number: string) {
   try {
@@ -32,13 +37,43 @@ async function getHistory (number: string) {
 
 async function registerUser (message: any) {
   try {
-    console.log('entrou register', message)
-    const database = mongoClient.db('reminders')
-    const users = database.collection('users')
+    const messagesArray = []
+    messagesArray.push(message)
+    const userData = {
+      from: message.From,
+      to: message.To,
+      messagesArray: messagesArray,
+      stage: 1,
+      name: message.ProfileName
+    }
     const data = await users.insertOne({
-      ...message
+      ...userData
     })
-    console.log('data', data)
+    return data
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+async function getUserData (from: string, to: string) {
+  try {
+    const data = await users.findOne({ from: from, to: to })
+    return data
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+async function insertIncomingMessageToUser (from: string, to: string, message: any): Promise<void> {
+  try {
+    const response = await getUserData(from, to)
+    const messagesArray = response?.messagesArray
+    messagesArray.push(message)
+    await users.updateOne({ from: from, to:to }, { 
+      $set: {
+        messagesArray: messagesArray
+      }
+    })
   } catch (error) {
     throw new Error(error)
   }
@@ -49,32 +84,32 @@ const handle = async (req: any, res: any) => {
   try {
     const body = JSON.parse(JSON.stringify(req.body))
     console.log('body', body)
-    // const message = req.body.Body
-    const name = req.body.ProfileName
-    // const from = req.body.From
 
     const previousMessages = await getHistory(body.From)
-    console.log("previousMessages", previousMessages)
+    const previousMessagesFromOurDB = await getUserData(body.From, body.To)
+    console.log('previousMessagesFromOurDB', previousMessagesFromOurDB)
+    
     const response = new MessagingResponse()
 
-    if (Array.isArray(previousMessages) && previousMessages.length < 1) {
+    if ((Array.isArray(previousMessages) && previousMessages.length < 1) || 
+      !previousMessagesFromOurDB) {
       await registerUser(body)
-      // register the new user
-      // send menu options
-    } else if (Array.isArray(previousMessages) && previousMessages.length > 0) {
-      const menu = templates.Menu()
-      const messageToSend = `
-      Olá *${name}*! O que deseja?
-
-      ${menu}
-      `
-      response.message(messageToSend)
-      // verify if last message it was less than an hour ago
     }
+
+    await insertIncomingMessageToUser(body.From, body.To, body)
+
+    const userData = await getUserData(body.From, body.To)
+
+    const botManager = new BotManager(templates, mongoClient, response)
+
+    const message = await botManager.handleStage(userData)
+
+    console.log('message', message)
     
-   
-    res.set("Content-Type", "application/xml")
-    res.send(response.toString())   
+    response.message(message.toString())
+    
+    res.set("Content-Type", "text/xml")
+    res.send(response.toString())
   } catch (error) {
     throw new Error(error)
   }

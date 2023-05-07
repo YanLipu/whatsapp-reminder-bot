@@ -12,3 +12,10 @@ export interface Task {
   properties: any
   url: string
 }
+
+export interface TaskPayload {
+  nameTask: string
+  dateStart: string
+  dateEnd: string
+  recurrent: boolean
+}
