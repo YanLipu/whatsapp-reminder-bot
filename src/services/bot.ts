@@ -2,7 +2,8 @@ import MessagingResponse from "twilio/lib/twiml/MessagingResponse"
 import Templates from "../templates/messages"
 import { User } from "../types/user.type"
 import { Collection, Db, MongoClient } from 'mongodb'
-import { getDataBase } from "./notion"
+import { getDataBase, insertNewTask } from "./notion"
+import { TaskPayload } from "../types/notion.type"
 
 
 class BotManager {
@@ -28,28 +29,28 @@ class BotManager {
       const messagesArrayLength = this.incomingUserAndMessages.messagesArray.length
       let message: any = ''
       switch (stage) {
-        case 1: // envia o menu e altera o stage pra 2
+        case 1: 
           message = await this.sendStartMenu(userData.messagesArray[0].ProfileName)
           break
-        case 2:  // verifica a opcao digitada e altera o stage para 3 ou 4
+        case 2:  
           message = await this.handleMessage(userData.messagesArray[messagesArrayLength - 1].Body, stage)
           break
-        case 3: // salva o nome da task, pergunta a data e altera o stage para 5
+        case 3: 
           message = await this.sendCreateTaskDate(userData.messagesArray[messagesArrayLength - 1].Body)
           break
-        case 4: // lista as tasks e altera o stage para 1
+        case 4: 
           message = await this.sendListOfTasks()
           break
-        case 5: // salva a data, pergunta se é recorrente e altera o stage para 6
+        case 5: 
           message = await this.sendQuestionRecurring(userData.messagesArray[messagesArrayLength - 1].Body)
           break
-        case 6: // verifica se é recorrente, e altera o stage para 7 ou 8
+        case 6: 
           message = await this.handleMessage(userData.messagesArray[messagesArrayLength - 1].Body, stage)
           break
-        case 7: // não é recorrente, manda mensagem se quer criar nova task, altera o stage para 10
+        case 7: 
           message = await this.handleMessage(userData.messagesArray[messagesArrayLength - 1].Body, stage)
           break
-        case 8: // salva a data de final e altera o stage para 9
+        case 8: 
           message = await this.sendEndRecurring(userData.messagesArray[messagesArrayLength - 1].Body)
           break
         default:
@@ -64,7 +65,6 @@ class BotManager {
   private async handleMessage (message: string, stage: number): Promise<string> {
     if (stage === 2) {
       if (message === '1' || message.toLowerCase() === 'criar') {
-        // setar stage para 3
         await this.userCollection.updateOne({
           from: this.incomingUserAndMessages.from,
           to: this.incomingUserAndMessages.to
@@ -75,16 +75,16 @@ class BotManager {
         })
         return this.templates.createTaskName()
       } else if (message === '2' || message.toLowerCase() === 'listar') {
-        // setar stage para 4
         await this.userCollection.updateOne({
           from: this.incomingUserAndMessages.from,
           to: this.incomingUserAndMessages.to
         }, {
           $set: {
-            stage: 4
+            stage: 1
           }
         })
-        return this.templates.listTasks()
+        const listOfTasks = await this.sendListOfTasks()
+        return this.templates.listTasks(listOfTasks)
       }
     } else if (stage === 6) {
       if (message === 'Sim') {
@@ -93,7 +93,8 @@ class BotManager {
           to: this.incomingUserAndMessages.to
         }, {
           $set: {
-            stage: 8
+            stage: 8,
+            recurrent: true
           }
         })
         return this.templates.createRecurringEnd()
@@ -103,7 +104,8 @@ class BotManager {
           to: this.incomingUserAndMessages.to
         }, {
           $set: {
-            stage: 7
+            stage: 7,
+            recurrent: false
           }
         })
         return this.templates.createTaskSuccess()
@@ -118,6 +120,8 @@ class BotManager {
             stage: 3
           }
         })
+        const taskPayload = this.treatUserData(this.incomingUserAndMessages)
+        await insertNewTask(taskPayload)
         return this.templates.createTaskName()
       } else {
         await this.userCollection.updateOne({
@@ -128,6 +132,8 @@ class BotManager {
             stage: 1
           }
         })
+        const taskPayload = this.treatUserData(this.incomingUserAndMessages)
+        await insertNewTask(taskPayload)
         return this.templates.endTaskCreation()
       }
     }
@@ -170,12 +176,19 @@ class BotManager {
   private async sendListOfTasks (): Promise<string> {
     try {
       const response = await getDataBase()
-      const taskList = response.results.map(item => item)
-      console.log('taskList', taskList)
-      // pegar lista de tasks do notion
-      // estruturar mensagem
-      // alterar o stage para 1
-      return taskList.toString()
+      const database = response.results.map(item => item)
+      const taskList = database.filter((item: any)=>{
+        if (
+          item.properties.Status.select && 
+          item.properties.Status.select.name === 'To Do') {
+          return item
+        }
+      })
+      let message = ''
+      taskList.forEach((item:any, index: number)=>{
+        message += `*Task ${index + 1}*: ${item.properties.Name.title[0].plain_text}\n`
+      })
+      return message.toString()
     } catch (error) {
       throw new Error(error)
     }
@@ -198,22 +211,6 @@ class BotManager {
     }
   }
 
-  // private async sendSuccessMessage (): Promise<string> {
-  //  try {
-  //    await this.userCollection.updateOne({
-  //      from: this.incomingUserAndMessages.from,
-  //      to: this.incomingUserAndMessages.to
-  //    }, {
-  //      $set: {
-  //        stage: 1
-  //      }
-  //    })
-  //    return this.templates.endTaskCreation()
-  //  } catch (error) {
-  //    throw new Error(error)
-  //  }
-  // }
-
   private async sendEndRecurring (data: string): Promise<string> {
     try {      
       await this.userCollection.updateOne({
@@ -229,6 +226,21 @@ class BotManager {
     } catch (error) {
       throw new Error(error)
     }
+  }
+
+  private treatUserData (data: User): TaskPayload {
+    const todayDate = new Date()
+    const isoString = todayDate.toISOString()
+    const today = isoString.split('T')
+    const dateStart = data.dateStart ? data.dateStart.replace(/\//g, "-") : today[0]
+    const dateEnd = data.dateEnd ? data.dateEnd.replace(/\//g, "-") : today[0]
+    const taskData = {
+      dateStart,
+      dateEnd,
+      nameTask: data.nameTask ? data.nameTask : '',
+      recurrent: data.recurrent ? data.recurrent : false
+    }
+    return taskData
   }
 }
 
